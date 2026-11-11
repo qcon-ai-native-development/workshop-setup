@@ -1,0 +1,33 @@
+# The workshop container: Claude Code, OpenCode, JDK 17 and PetClinic's
+# dependencies, with your clone of the sandbox mounted at /work.
+#
+#   docker compose pull         download the image
+#   docker compose up -d        start the container
+#   docker compose exec workshop claude
+#   docker compose exec workshop bash
+#   docker compose down         stop it; your sign-in and the sandbox stay
+#
+# Run the commands from this folder.
+name: harness-workshop
+
+services:
+  workshop:
+    image: ghcr.io/qcon-ai-native-development/workshop:2026-11-13
+    init: true
+    working_dir: /work
+    ports:
+      # PetClinic, on the laptop only.
+      - "127.0.0.1:${HE_APP_PORT:-8080}:8080"
+    volumes:
+      # Your clone of the sandbox, so you can read it in your own editor.
+      - ${HE_SANDBOX_DIR:-../petclinic}:/work
+      # Sign-ins and downloads. They outlive the container, so the sign-in
+      # you test with the check is the one you use in the workshop.
+      - claude:/home/node/.claude
+      - opencode:/home/node/.local/share/opencode
+      - m2:/home/node/.m2
+
+volumes:
+  claude: {}
+  opencode: {}
+  m2: {}

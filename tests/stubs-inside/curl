@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Stub of curl: answers for the two URLs he-check asks for.
+url=""
+for a in "$@"; do case "$a" in http*) url="$a" ;; esac; done
+case "$url" in
+  *localhost:8080*) if [ -e "$STATE/app-up" ]; then printf 200; exit 0; fi; printf 000; exit 7 ;;
+  *api.anthropic.com*) if [ "${STUB_NET:-ok}" = ok ]; then printf 404; exit 0; fi; printf 000; exit 6 ;;
+esac
+printf 000; exit 6

@@ -1,0 +1,3 @@
+# The image needs only image/. Everything else stays out of the build context.
+*
+!image/

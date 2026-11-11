@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Stub of the docker client for check.sh's tests. Environment variables choose
+# the machine's state; $STATE holds what the stub records.
+echo "$*" >> "$STATE/docker-calls"
+args="$*"
+case "$args" in
+  "version --format"*)
+    [ "${STUB_DAEMON:-up}" = up ] || { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
+    echo "${STUB_DOCKER_VERSION:-28.0.1}" ;;
+  "compose version"*)
+    [ "${STUB_COMPOSE:-ok}" = ok ] || { echo "docker: 'compose' is not a docker command." >&2; exit 1; }
+    echo "2.30.0" ;;
+  "info --format"*) echo "${STUB_MEM:-8589934592}" ;;
+  "image inspect"*) [ "${STUB_IMAGE:-pulled}" = pulled ] || exit 1; echo "[]" ;;
+  compose*" config --images") echo "ghcr.io/qcon-ai-native-development/workshop:test-tag" ;;
+  compose*" ps "*) [ "${STUB_CONTAINER:-up}" = up ] && echo "0123456789ab"; exit 0 ;;
+  compose*" exec -T workshop he-check --stop-app") rm -f "$STATE/app-up" ;;
+  compose*" exec -T workshop he-check"*)
+    case "$args" in *--no-app*) ;; *) touch "$STATE/app-up" ;; esac
+    if [ -n "${STUB_INSIDE:-}" ]; then
+      printf '%s\n' "$STUB_INSIDE"
+    else
+      printf '%s\n' \
+        "PASS  java             17.0.13" \
+        "PASS  build            the sandbox compiles offline" \
+        "PASS  claude           2.1.281" \
+        "PASS  claude-model     the model answered in 4 s" \
+        "PASS  app              PetClinic started and answers on port 8080 (21 s)" \
+        "PASS  network          api.anthropic.com is reachable" \
+        "PASS  opencode         1.18.32"
+    fi
+    exit "${STUB_INSIDE_EXIT:-0}" ;;
+  *) echo "docker stub: unexpected: $args" >&2; exit 64 ;;
+esac

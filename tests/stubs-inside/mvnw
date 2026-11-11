@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Stub of the Maven wrapper, copied into the fake work folder.
+echo "$*" >> "$STATE/mvnw-calls"
+case "$*" in
+  *spring-boot:run*)
+    [ "${STUB_APP:-up}" = up ] && touch "$STATE/app-up"
+    echo $$ > "$STATE/app-pid"
+    trap 'rm -f "$STATE/app-up"; exit 0' TERM INT
+    while :; do sleep 0.2; done ;;
+  *compile*) exit "${STUB_COMPILE_EXIT:-0}" ;;
+esac

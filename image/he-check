@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# he-check: the container half of the workshop's setup check. It is part of
+# the workshop image.
+#
+# Usage:   he-check              in a Codespace, or by hand in the container
+# Options: --no-model            skip the one model call
+#          --no-app              don't start PetClinic
+#          --from-host           called by check.sh on the laptop: print check
+#                                lines only, and leave PetClinic running so the
+#                                laptop can test the published port
+#          --stop-app            stop a PetClinic that --from-host left running
+#
+# Environment:
+#   HE_WORK                 the sandbox folder (default: the git repository of
+#                           the current folder, else /work)
+#   HE_CHECK_APP_TIMEOUT    seconds to wait for PetClinic (default: 180)
+#   HE_CHECK_MODEL_TIMEOUT  seconds to wait for the model's reply (default: 60)
+#
+# It reads tool versions, compiles the sandbox offline (which writes target/),
+# starts and stops PetClinic, and asks the model for one word. It never prints
+# keys, tokens or environment variables.
+#
+# Exit status: 0 when nothing failed, 1 when at least one check failed.
+
+set -u
+
+MODEL=1
+APP=1
+FROM_HOST=0
+STOP_APP=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-model) MODEL=0 ;;
+    --no-app) APP=0 ;;
+    --from-host) FROM_HOST=1 ;;
+    --stop-app) STOP_APP=1 ;;
+    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) printf 'he-check: unknown option: %s\n' "$arg" >&2; exit 2 ;;
+  esac
+done
+
+APP_TIMEOUT="${HE_CHECK_APP_TIMEOUT:-180}"
+MODEL_TIMEOUT="${HE_CHECK_MODEL_TIMEOUT:-60}"
+APP_URL="http://localhost:8080"
+# Where the PetClinic that this script started keeps its process id and log.
+# One folder per sandbox, so two sandboxes never share a process id file.
+RUN_DIR="${TMPDIR:-/tmp}/he-check"
+
+# The sandbox: the clone this was started in, else /work. With Docker on the
+# laptop the two are the same; in a Codespace the clone is under /workspaces,
+# and the image's /work is empty.
+if [ -n "${HE_WORK:-}" ]; then
+  WORK="$HE_WORK"
+elif top="$(git rev-parse --show-toplevel 2>/dev/null)" && [ -n "$top" ]; then
+  WORK="$top"
+else
+  WORK=/work
+fi
+RUN_DIR="$RUN_DIR$(printf '%s' "$WORK" | tr -c 'A-Za-z0-9' '_')"
+PID_FILE="$RUN_DIR/app.pid"
+APP_LOG="$RUN_DIR/app.log"
+
+if [ "${CODESPACES:-}" = true ]; then
+  WHERE=codespaces
+  SIGN_IN="Run: claude"
+else
+  WHERE=container
+  SIGN_IN="On the laptop, run: docker compose exec workshop claude"
+fi
+
+PASS=0
+WARN=0
+FAIL=0
+SUMMARY=""
+TILDE="~"
+
+# result STATUS LABEL DETAIL
+result() {
+  case "$1" in
+    PASS) PASS=$((PASS + 1)) ;;
+    WARN) WARN=$((WARN + 1)) ;;
+    FAIL) FAIL=$((FAIL + 1)) ;;
+  esac
+  detail="${3//"$HOME"/$TILDE}"
+  printf '%-4s  %-16s %s\n' "$1" "$2" "$detail"
+  if [ "$1" != PASS ]; then
+    SUMMARY="${SUMMARY}${1} ${2}: ${detail}
+"
+  fi
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+app_answers() {
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$APP_URL" 2>/dev/null)" || true
+  [ "$code" = 200 ]
+}
+
+# Stops the PetClinic this script started. spring-boot:run starts Java as a
+# child of Maven, so the signal goes to the whole process group.
+stop_app() {
+  [ -f "$PID_FILE" ] || return 0
+  pid="$(cat "$PID_FILE")"
+  rm -f "$PID_FILE"
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || return 0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 1
+  done
+  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+}
+
+if [ "$STOP_APP" -eq 1 ]; then
+  stop_app
+  exit 0
+fi
+
+# --- Java --------------------------------------------------------------------
+
+if have java; then
+  java_line="$(java -version 2>&1 | grep 'version "' | head -n 1)"
+  java_version="$(printf '%s' "$java_line" | sed -n 's/.*version "\([^"]*\)".*/\1/p')"
+  case "$java_version" in
+    17|17.*) result PASS java "$java_version" ;;
+    '') result FAIL java "could not read a version from: java -version" ;;
+    *) result FAIL java "$java_version. The workshop image has JDK 17; this is not that image" ;;
+  esac
+else
+  result FAIL java "not found. This is not the workshop image"
+fi
+
+# --- Sandbox -----------------------------------------------------------------
+
+# check.sh on the laptop checks the clone against the pinned commit. Run alone
+# (a Codespace is created from the repository itself), report what is here.
+if [ "$FROM_HOST" -eq 0 ]; then
+  if head="$(git -C "$WORK" rev-parse HEAD 2>/dev/null)"; then
+    changes="$(git -C "$WORK" --no-optional-locks status --porcelain 2>/dev/null | head -n 1)"
+    if [ -n "$changes" ]; then
+      result WARN sandbox "commit ${head:0:7}, with local changes. Run: git status"
+    else
+      result PASS sandbox "commit ${head:0:7}, no local changes"
+    fi
+  else
+    result FAIL sandbox "$WORK is not a git clone of the sandbox"
+  fi
+fi
+
+# --- Build -------------------------------------------------------------------
+
+# Offline mode: the build passes only when the dependencies baked into the
+# image are the ones Maven uses.
+BUILT=0
+if [ ! -x "$WORK/mvnw" ]; then
+  result FAIL build "no Maven wrapper in $WORK. The sandbox is not mounted there"
+else
+  mkdir -p "$RUN_DIR"
+  if (cd "$WORK" && ./mvnw -o -q -B -DskipTests compile) >"$RUN_DIR/compile.log" 2>&1 </dev/null; then
+    result PASS build "the sandbox compiles offline"
+    BUILT=1
+  else
+    result FAIL build "the offline compile failed. Its output is in $RUN_DIR/compile.log"
+  fi
+fi
+
+# --- Claude Code -------------------------------------------------------------
+
+if have claude; then
+  claude_version="$(claude --version 2>/dev/null | head -n 1 | cut -d' ' -f1)"
+  want="${HE_CLAUDE_VERSION:-}"
+  if [ -z "$claude_version" ]; then
+    result FAIL claude "installed, but 'claude --version' prints nothing"
+  elif [ -n "$want" ] && [ "$claude_version" != "$want" ]; then
+    result WARN claude "$claude_version. The workshop is tested with $want"
+  else
+    result PASS claude "$claude_version"
+  fi
+
+  if [ "$MODEL" -eq 1 ]; then
+    # An empty folder outside the sandbox, so none of the sandbox's own agent
+    # configuration loads for this call.
+    model_dir="$(mktemp -d)"
+    started=$(date +%s)
+    reply="$(cd "$model_dir" && timeout "$MODEL_TIMEOUT" \
+      claude -p 'Reply with exactly this word and nothing else: READY' 2>&1 </dev/null)"
+    took=$(($(date +%s) - started))
+    rmdir "$model_dir" 2>/dev/null || true
+    case "$reply" in
+      *READY*) result PASS claude-model "the model answered in ${took} s" ;;
+      *)
+        first="$(printf '%s' "$reply" | head -n 1 | cut -c1-80)"
+        result FAIL claude-model "no answer from the model (${first:-no output}). If you have not signed in yet: $SIGN_IN" ;;
+    esac
+  fi
+else
+  result FAIL claude "not found. This is not the workshop image"
+fi
+
+# --- PetClinic ---------------------------------------------------------------
+
+if [ "$APP" -eq 1 ] && [ "$BUILT" -eq 1 ]; then
+  if ! have curl; then
+    result WARN app "curl not found, so the application was not tested"
+  elif app_answers; then
+    result PASS app "PetClinic is already running and answers on port 8080"
+  else
+    mkdir -p "$RUN_DIR"
+    (
+      cd "$WORK" || exit 1
+      exec setsid ./mvnw -o -q spring-boot:run \
+        -Dspring-javaformat.skip=true -Dcheckstyle.skip=true >"$APP_LOG" 2>&1 </dev/null
+    ) &
+    app_pid=$!
+    echo "$app_pid" > "$PID_FILE"
+    waited=0
+    up=0
+    while [ "$waited" -lt "$APP_TIMEOUT" ]; do
+      if app_answers; then up=1; break; fi
+      kill -0 "$app_pid" 2>/dev/null || break
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if [ "$up" -eq 1 ]; then
+      result PASS app "PetClinic started and answers on port 8080 (${waited} s)"
+      [ "$FROM_HOST" -eq 1 ] || stop_app
+    elif kill -0 "$app_pid" 2>/dev/null; then
+      result FAIL app "PetClinic did not answer on port 8080 within ${APP_TIMEOUT} seconds. Its output is in $APP_LOG"
+      stop_app
+    else
+      result FAIL app "PetClinic stopped while starting. Its output is in $APP_LOG"
+      rm -f "$PID_FILE"
+    fi
+  fi
+fi
+
+# --- Network -----------------------------------------------------------------
+
+# Any HTTP response counts; only a failed connection fails.
+if have curl; then
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://api.anthropic.com 2>/dev/null)" || true
+  if [ -n "$code" ] && [ "$code" != 000 ]; then
+    result PASS network "api.anthropic.com is reachable"
+  else
+    result FAIL network "cannot reach https://api.anthropic.com. A proxy or firewall may block it"
+  fi
+fi
+
+# --- OpenCode ----------------------------------------------------------------
+
+# Optional in the workshop, so a problem here warns. No model call: this says
+# nothing about OpenCode's sign-in.
+if opencode_version="$(opencode --version 2>/dev/null | head -n 1)" && [ -n "$opencode_version" ]; then
+  result PASS opencode "$opencode_version"
+else
+  result WARN opencode "'opencode --version' failed. OpenCode is optional in the workshop"
+fi
+
+# --- Summary -----------------------------------------------------------------
+
+if [ "$FROM_HOST" -eq 0 ]; then
+  echo
+  echo "Paste the block below into your reply:"
+  echo
+  echo '```'
+  printf 'workshop check, %s, Linux %s\n' "$(date '+%Y-%m-%d %H:%M')" "$(uname -m)"
+  printf 'path: %s\n' "$WHERE"
+  printf 'image: %s\n' "${HE_IMAGE_TAG:-unknown}"
+  printf '%s pass, %s warn, %s fail\n' "$PASS" "$WARN" "$FAIL"
+  printf '%s' "$SUMMARY"
+  echo '```'
+fi
+
+if [ "$FAIL" -gt 0 ]; then
+  exit 1
+fi
+exit 0

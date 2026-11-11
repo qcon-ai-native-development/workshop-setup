@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stub of Claude Code for he-check's tests.
+case "$1" in
+  --version) echo "${STUB_CLAUDE_VERSION:-2.1.281} (Claude Code)"; exit 0 ;;
+esac
+pwd > "$STATE/claude-cwd"
+printf '%s\n' "${STUB_CLAUDE_REPLY-READY}"
+exit "${STUB_CLAUDE_EXIT:-0}"

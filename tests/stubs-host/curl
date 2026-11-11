@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Stub of curl on the laptop: the published port answers while the stubbed
+# container has PetClinic running, unless the test blocks the port.
+if [ -e "$STATE/app-up" ] && [ "${STUB_PORT:-open}" = open ]; then printf 200; exit 0; fi
+printf 000; exit 7

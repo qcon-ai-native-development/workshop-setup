@@ -1,0 +1,129 @@
+# Lints and tests the check scripts, builds the workshop image on both
+# architectures, then follows the README's steps in the built container and
+# runs check.sh. A red run means an attendee following the README would hit
+# the same problem.
+#
+# The sign-in (step 4) needs a person, so the check runs with --no-model.
+# macOS and Windows have no runner with Docker here; they are tested by hand.
+#
+# From main, a tag that is not in the registry yet is published: one image per
+# architecture, then one manifest that joins them. A published tag is never
+# overwritten, so to release a new image, change the tag in compose.yaml.
+
+name: setup
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 12 * * *" # daily, to catch changes in the base image and the installers
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: shellcheck
+        run: shellcheck -x -P SCRIPTDIR check.sh image/he-check tests/*.sh tests/stubs-inside/* tests/stubs-host/*
+      - name: hadolint
+        run: docker run --rm -i hadolint/hadolint hadolint --ignore DL3008 --ignore DL4006 --ignore DL3003 - < Dockerfile
+      - name: Tests of the check scripts
+        run: |
+          bash tests/he-check-test.sh
+          bash tests/check-test.sh
+          bash tests/pins-test.sh
+
+  image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Steps 2 and 3 of the README, with this checkout as the setup
+      # repository, so the run tests the pushed commit.
+      - uses: actions/checkout@v5
+        with:
+          path: workshop-setup
+
+      # Signed in first, so that a published tag is found while the package
+      # is still private. A pull request from a fork has no write token.
+      - name: Sign in to the registry
+        if: github.event_name != 'pull_request'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Read the image name from compose.yaml
+        run: |
+          image="$(docker compose -f workshop-setup/compose.yaml config --images | head -n 1)"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo "PUBLISHED=1" >> "$GITHUB_ENV"
+          else
+            echo "PUBLISHED=0" >> "$GITHUB_ENV"
+          fi
+
+      # Always build, so a broken base image or installer shows up here and
+      # not on the day a new image is needed.
+      - name: Build the image
+        run: docker build -t "$IMAGE-ci" --build-arg IMAGE_TAG="${IMAGE##*:}" workshop-setup
+
+      # Test what attendees get: the published image when the tag is out,
+      # this build otherwise.
+      - name: Choose the image under test
+        run: |
+          if [ "$PUBLISHED" = 1 ]; then
+            docker compose -f workshop-setup/compose.yaml pull
+          else
+            docker tag "$IMAGE-ci" "$IMAGE"
+          fi
+
+      - name: Step 2, clone the sandbox
+        run: |
+          git clone https://github.com/qcon-ai-native-development/petclinic.git petclinic
+          # The runner's user id is not 1000; see "Linux with another user id".
+          sudo chown -R 1000:1000 petclinic
+          git config --global --add safe.directory "$PWD/petclinic"
+
+      - name: Step 3, start the container
+        run: docker compose -f workshop-setup/compose.yaml up -d
+
+      - name: Step 5, check
+        run: bash workshop-setup/check.sh --no-model
+
+      - name: Publish this architecture's image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.PUBLISHED == '0'
+        run: |
+          docker tag "$IMAGE-ci" "$IMAGE-${{ matrix.arch }}"
+          docker push "$IMAGE-${{ matrix.arch }}"
+
+  manifest:
+    needs: [lint, image]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Join the two images under the tag in compose.yaml
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          image="$(docker compose config --images | head -n 1)"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo "$image is already published; nothing to do"
+            exit 0
+          fi
+          docker buildx imagetools create -t "$image" "$image-amd64" "$image-arm64"
+          docker buildx imagetools inspect "$image"
