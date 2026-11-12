@@ -44,20 +44,27 @@ RUN mkdir -p /work /home/node/.claude /home/node/.m2 /home/node/.cache \
 USER node
 
 # PetClinic's dependencies, downloaded once here so that nothing is downloaded
-# over the venue's network. The sandbox is cloned at its pinned commit, built
+# over the venue's network. The sandbox is cloned at a pinned commit, built
 # with its tests (which fetches the test runner too), and deleted; only
-# ~/.m2 stays. The two database tests need Docker and skip themselves.
+# ~/.m2 stays. "clean" is there because agents often run it, and it needs a
+# plugin of its own. The two database tests need Docker and skip themselves.
 #
-# This is the last large layer. A new sandbox commit rebuilds it and nothing
-# above it.
+# SANDBOX_COMMIT is the sandbox's starting state, the commit check.sh expects.
+# SANDBOX_DEPS_COMMIT is the sandbox's image-deps branch: the starting state
+# plus every dependency the day's later steps add. That is the commit built
+# here, so those steps build without the network too.
+#
+# This is the last large layer. A new dependencies commit rebuilds it and
+# nothing above it.
 ARG SANDBOX_REPO=https://github.com/qcon-ai-native-development/petclinic.git
-ARG SANDBOX_COMMIT=705e5608c68e43743251494d57150bdfc087eb47
+ARG SANDBOX_COMMIT=4f8a4504a308fd32147e525f0154b153d425ea2d
+ARG SANDBOX_DEPS_COMMIT=dbfaf89a8ca165a7dbe6144ae89881fd00d50c8e
 RUN git init -q /tmp/sandbox \
  && cd /tmp/sandbox \
  && git remote add origin "${SANDBOX_REPO}" \
- && git fetch -q --depth 1 origin "${SANDBOX_COMMIT}" \
+ && git fetch -q --depth 1 origin "${SANDBOX_DEPS_COMMIT}" \
  && git checkout -q FETCH_HEAD \
- && ./mvnw -B -q verify \
+ && ./mvnw -B -q clean verify \
  && ./mvnw -B -q -o spring-boot:help \
  && cd / \
  && rm -rf /tmp/sandbox

@@ -12,7 +12,7 @@ name: harness-workshop
 
 services:
   workshop:
-    image: ghcr.io/qcon-ai-native-development/workshop:2026-11-13
+    image: ghcr.io/qcon-ai-native-development/workshop:2026-11-14
     init: true
     working_dir: /work
     ports:
@@ -21,13 +21,15 @@ services:
     volumes:
       # Your clone of the sandbox, so you can read it in your own editor.
       - ${HE_SANDBOX_DIR:-../petclinic}:/work
-      # Sign-ins and downloads. They outlive the container, so the sign-in
-      # you test with the check is the one you use in the workshop.
+      # Sign-ins. They outlive the container, so the sign-in you test with the
+      # check is the one you use in the workshop.
       - claude:/home/node/.claude
       - opencode:/home/node/.local/share/opencode
-      - m2:/home/node/.m2
+      # Maven's downloads are deliberately not in a volume. A volume is filled
+      # from the image only when it is created, so it would keep an old image's
+      # dependencies after an update. Without one, they always come from the
+      # image in use.
 
 volumes:
   claude: {}
   opencode: {}
-  m2: {}

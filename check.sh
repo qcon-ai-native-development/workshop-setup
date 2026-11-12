@@ -28,7 +28,7 @@ SETUP_DIR="$(cd "$(dirname "$0")" && pwd)"
 SANDBOX_DIR="${HE_SANDBOX_DIR:-$(dirname "$SETUP_DIR")/petclinic}"
 # The sandbox's pinned commit and the repository it is cloned from.
 # HE_SANDBOX_COMMIT overrides the commit, for the presenters' own tests.
-SANDBOX_COMMIT="${HE_SANDBOX_COMMIT:-705e5608c68e43743251494d57150bdfc087eb47}"
+SANDBOX_COMMIT="${HE_SANDBOX_COMMIT:-4f8a4504a308fd32147e525f0154b153d425ea2d}"
 SANDBOX_REMOTE="qcon-ai-native-development/petclinic"
 SANDBOX_URL="https://github.com/qcon-ai-native-development/petclinic.git"
 APP_PORT="${HE_APP_PORT:-8080}"

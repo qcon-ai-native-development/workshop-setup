@@ -219,7 +219,7 @@ PetClinic is then on `http://localhost:8081`.
 
 ## Updates
 
-We will change the sandbox before the workshop, and we'll email you when we do. These commands replace your copy of the sandbox with the current one. They discard any change you made in it.
+We will change the sandbox and the image before the workshop, and we'll email you when we do. If you set up before that email, do this once. It replaces your copy of the sandbox with the current one and discards any change you made in it.
 
 Option A:
 
@@ -230,14 +230,9 @@ git -C ~/Projects/qcon-workshop/petclinic reset --hard origin/main
 cd ~/Projects/qcon-workshop/workshop-setup && docker compose pull && docker compose up -d
 ```
 
-Option B, in the codespace's terminal:
+Your sign-in stays. Then run the check again (step A5).
 
-```bash
-git -C /workspaces/petclinic fetch origin
-git -C /workspaces/petclinic reset --hard origin/main
-```
-
-Then run the check again. If the image changes too, the email will say how to rebuild a codespace.
+Option B: a codespace keeps the image it was created with, so replace it. Delete your codespace at <https://github.com/codespaces>, then do steps B1 to B3 again. This takes a few minutes and includes signing in again.
 
 ## For the presenters
 

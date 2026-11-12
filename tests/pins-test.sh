@@ -21,6 +21,15 @@ sandbox_commit() {
 }
 t "check.sh and the Dockerfile pin the same sandbox commit" sandbox_commit
 
+dependencies_commit() {
+  OUT=""
+  deps="$(pin Dockerfile 's/^ARG SANDBOX_DEPS_COMMIT=\([0-9a-f]\{40\}\)$/\1/p')"
+  [ -n "$deps" ] || fail "no 40-character SANDBOX_DEPS_COMMIT in the Dockerfile"
+  # shellcheck disable=SC2016 # the Dockerfile's own variable, matched as text
+  grep -q 'origin "${SANDBOX_DEPS_COMMIT}"' "$root/Dockerfile" || fail "the Dockerfile does not fetch SANDBOX_DEPS_COMMIT"
+}
+t "the Dockerfile takes its dependencies from a pinned checkpoint" dependencies_commit
+
 sandbox_repository() {
   OUT=""
   in_check="$(pin check.sh 's/^SANDBOX_URL="\(.*\)"$/\1/p')"
