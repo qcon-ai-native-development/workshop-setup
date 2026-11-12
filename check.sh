@@ -186,7 +186,9 @@ else
     *) result WARN sandbox "origin is '${url:-none}', expected $SANDBOX_REMOTE" ;;
   esac
   if [ "$head" != "$SANDBOX_COMMIT" ]; then
-    result FAIL sandbox "on commit ${head:0:7}, expected ${SANDBOX_COMMIT:0:7}. Run: git -C $SANDBOX_DIR pull"
+    # The sandbox's history is replaced when it changes, so a pull can fail.
+    # Fetch and reset works either way.
+    result FAIL sandbox "on commit ${head:0:7}, expected ${SANDBOX_COMMIT:0:7}. Run: git -C $SANDBOX_DIR fetch origin && git -C $SANDBOX_DIR reset --hard origin/main"
   else
     # Build output is ignored by the sandbox's .gitignore, so it does not
     # count as a change here.

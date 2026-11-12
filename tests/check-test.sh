@@ -84,7 +84,12 @@ t "an image that is not pulled fails and names the command" image_missing
 sandbox_missing() { NO_SANDBOX=1 check; exits 1; has_line '^FAIL +sandbox +.*git clone'; }
 t "a missing sandbox clone fails and says to clone it" sandbox_missing
 
-sandbox_other_commit() { WANT_COMMIT=0123456789abcdef0123456789abcdef01234567 check; exits 1; has_line '^FAIL +sandbox +.*expected 0123456'; }
+sandbox_other_commit() {
+  WANT_COMMIT=0123456789abcdef0123456789abcdef01234567 check
+  exits 1
+  has_line '^FAIL +sandbox +.*expected 0123456'
+  has_line '^FAIL +sandbox +.*fetch origin && git -C .* reset --hard origin/main'
+}
 t "a sandbox on another commit fails" sandbox_other_commit
 
 sandbox_other_origin() {
