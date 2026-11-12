@@ -15,7 +15,7 @@ If your laptop can't run Docker, use [GitHub Codespaces](#if-your-laptop-cant-ru
 - Docker, with at least 4 GB of memory given to it.
 - A Claude subscription (Pro, Max, Team or Enterprise) or an Anthropic Console account. A Pro plan may reach its usage limit during the day; Max or a Console account is the safer choice.
 
-On Windows, install Ubuntu with `wsl --install` in PowerShell, then do every step below in the Ubuntu terminal. Keep the workshop folders in your Linux home folder (`~/workshop`). Folders under `/mnt/c` are slow from WSL. PowerShell and CMD aren't supported.
+On Windows, install Ubuntu with `wsl --install` in PowerShell, then do every step below in the Ubuntu terminal. Keep the workshop folders in your Linux home folder (`~/Projects/qcon-workshop`). Folders under `/mnt/c` are slow from WSL. PowerShell and CMD aren't supported.
 
 ## 1. Docker
 
@@ -40,9 +40,9 @@ You also need git. macOS: `xcode-select --install`. Ubuntu and WSL: `sudo apt-ge
 Use exactly these paths. The container expects the two folders side by side.
 
 ```bash
-mkdir -p ~/workshop
-git clone https://github.com/qcon-ai-native-development/workshop-setup.git ~/workshop/workshop-setup
-git clone https://github.com/qcon-ai-native-development/petclinic.git ~/workshop/petclinic
+mkdir -p ~/Projects/qcon-workshop
+git clone https://github.com/qcon-ai-native-development/workshop-setup.git ~/Projects/qcon-workshop/workshop-setup
+git clone https://github.com/qcon-ai-native-development/petclinic.git ~/Projects/qcon-workshop/petclinic
 ```
 
 `petclinic` is the sandbox: the application we work on in the workshop.
@@ -50,14 +50,14 @@ git clone https://github.com/qcon-ai-native-development/petclinic.git ~/workshop
 ## 3. Download the image and start the container
 
 ```bash
-cd ~/workshop/workshop-setup
+cd ~/Projects/qcon-workshop/workshop-setup
 docker compose pull
 docker compose up -d
 ```
 
 The download is about 0.7 GB, and the image takes about 1.5 GB of disk. Download it at home; the venue's network is shared by everyone in the room.
 
-Every `docker compose` command in this file runs from `~/workshop/workshop-setup`.
+Every `docker compose` command in this file runs from `~/Projects/qcon-workshop/workshop-setup`.
 
 ## 4. Sign in to Claude Code
 
@@ -76,7 +76,7 @@ The command starts Claude Code in the container's home folder, away from the san
 ## 5. Run the check
 
 ```bash
-bash ~/workshop/workshop-setup/check.sh
+bash ~/Projects/qcon-workshop/workshop-setup/check.sh
 ```
 
 It takes about a minute. It prints one line per check, then a summary block. Send us the summary block by replying to the email that brought you here.
@@ -102,7 +102,7 @@ docker compose down
 ## On the day
 
 ```bash
-cd ~/workshop/workshop-setup
+cd ~/Projects/qcon-workshop/workshop-setup
 docker compose up -d
 docker compose exec workshop claude          # Claude Code, in the sandbox
 docker compose exec workshop bash            # a shell in the container
@@ -114,18 +114,22 @@ To run PetClinic, in a shell in the container:
 ./mvnw spring-boot:run
 ```
 
-Then open `http://localhost:8080` in your laptop's browser. The sandbox's files are in `~/workshop/petclinic`, so you can read them in your own editor.
+Then open `http://localhost:8080` in your laptop's browser. The sandbox's files are in `~/Projects/qcon-workshop/petclinic`, so you can read them in your own editor.
 
 ## If your laptop can't run Docker: Codespaces
 
 You need a personal GitHub account. An account managed by your employer may not be able to start a codespace on our repository. The free plan includes enough hours for the workshop, unless you have used them up this month.
 
 1. Open <https://github.com/qcon-ai-native-development/petclinic>, then **Code**, **Codespaces**, **Create codespace on main**.
-2. In the codespace's terminal, sign in. Start Claude Code in the home folder, follow the link it prints, then leave with `/exit`:
+2. In the codespace's terminal, sign in. Start Claude Code in the home folder with this command, exactly as written:
 
    ```bash
-   cd ~ && claude
+   cd ~ && env -u BROWSER claude
    ```
+
+   Claude Code prints a link. Open it, approve, copy the code the page shows, and paste it into the terminal. Then leave with `/exit`.
+
+   The `env -u BROWSER` part matters here. Without it, a codespace opens a browser tab for the sign-in, and that tab ends on a "localhost" error.
 
 3. Run the check from the sandbox folder and send us its summary block:
 
@@ -144,10 +148,11 @@ Send us the summary block and the failing line anyway, and we'll help. The most 
 | `docker` fails | Docker isn't installed, or isn't started | Step 1. Start Docker Desktop, OrbStack or Colima, then run the check again |
 | `docker-memory` warns | Docker has less than 4 GB | Raise the memory in Docker's settings. Colima: `colima stop && colima start --memory 6` |
 | `image` fails | The image isn't downloaded | Step 3 |
-| `sandbox` fails | The sandbox isn't cloned, or is on another commit | Step 2, or `git -C ~/workshop/petclinic pull` |
+| `sandbox` fails | The sandbox isn't cloned, or is on another commit | Step 2, or `git -C ~/Projects/qcon-workshop/petclinic pull` |
 | `container` fails | The container isn't running | `docker compose up -d` |
 | `build` fails | The container can't write to the sandbox | See "Linux with another user id" below. On macOS or Windows, send us the line |
 | `claude-model` fails | Not signed in, or no access to a model | Step 4. If you signed in and it still fails, send us the line |
+| The sign-in ends on a "localhost" error page | You are in a codespace, and a browser tab opened by itself | Close the tab and sign in with `cd ~ && env -u BROWSER claude` |
 | `network` fails | A company proxy or firewall blocks `api.anthropic.com` | Try another network, such as your phone's hotspot, and tell us |
 | `port` fails | Another program uses port 8080 | See "Port 8080 is taken" below |
 
@@ -158,8 +163,8 @@ If something can't be fixed before the day, come anyway, and come 20 minutes ear
 On Linux without Docker Desktop, the container works as user id 1000. If `id -u` prints another number, the container can't write to your clone. Either use the Codespaces path, or hand the clone to user id 1000 and read it without editing it from the laptop:
 
 ```bash
-sudo chown -R 1000:1000 ~/workshop/petclinic
-git config --global --add safe.directory ~/workshop/petclinic
+sudo chown -R 1000:1000 ~/Projects/qcon-workshop/petclinic
+git config --global --add safe.directory ~/Projects/qcon-workshop/petclinic
 ```
 
 ### Port 8080 is taken
@@ -179,9 +184,9 @@ PetClinic is then on `http://localhost:8081`.
 We may change these repositories before the workshop. To get the changes:
 
 ```bash
-git -C ~/workshop/workshop-setup pull
-git -C ~/workshop/petclinic pull
-cd ~/workshop/workshop-setup && docker compose pull && docker compose up -d
+git -C ~/Projects/qcon-workshop/workshop-setup pull
+git -C ~/Projects/qcon-workshop/petclinic pull
+cd ~/Projects/qcon-workshop/workshop-setup && docker compose pull && docker compose up -d
 ```
 
 Then run the check again.
