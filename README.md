@@ -139,6 +139,14 @@ You need a personal GitHub account. An account managed by your employer may not 
 
 4. Stop the codespace from <https://github.com/codespaces> so it doesn't use up your hours. Start the same one again on the day; don't delete it.
 
+On the day, start the same codespace again and work in its terminal: `claude` starts Claude Code in the sandbox. To see PetClinic, start it yourself; the check stops it again when it finishes.
+
+```bash
+./mvnw spring-boot:run
+```
+
+Wait for the line `Started PetClinicApplication`. Then open the **Ports** tab in the bottom panel, find port 8080, and click the globe icon beside its address. A 502 error on that page means PetClinic isn't running yet.
+
 ## If a check fails
 
 Send us the summary block and the failing line anyway, and we'll help. The most common causes:
