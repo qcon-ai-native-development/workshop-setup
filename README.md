@@ -4,7 +4,7 @@ Setup for the QCon San Francisco workshop "Effective AI-native Development with 
 
 The workshop runs in a container that holds Claude Code, OpenCode, Java 17 and everything PetClinic needs to build. You can run that container in one of two ways. Both are fully supported, and both give you the same tools.
 
-When you have finished, run the check and post its summary block in the workshop's Slack channel. If you aren't in the channel yet, send it to the address in the setup email. Please do this by Tuesday 17 November, so we have time to help if something fails.
+When you have finished, run the check and send its summary block to the address in the setup email, so we can help if something fails.
 
 ## Choose one option
 
@@ -89,7 +89,7 @@ The command starts Claude Code in the container's home folder, away from the san
 bash ~/Projects/qcon-workshop/workshop-setup/check.sh
 ```
 
-It takes about a minute. It prints one line per check, then a summary block. Post the summary block in the Slack channel, or send it to the address in the setup email.
+It takes about a minute. It prints one line per check, then a summary block. Send the summary block to the address in the setup email.
 
 What the check does:
 
@@ -152,7 +152,7 @@ The `env -u BROWSER` part matters. Without it, a codespace opens a browser tab f
 cd /workspaces/petclinic && he-check
 ```
 
-It takes about a minute. It prints one line per check, then a summary block. Post the summary block in the Slack channel, or send it to the address in the setup email.
+It takes about a minute. It prints one line per check, then a summary block. Send the summary block to the address in the setup email.
 
 The check compiles the sandbox without the network, starts PetClinic, tests it, and stops it again. It asks Claude for one word, to prove that your sign-in works. It doesn't print keys, tokens or environment variables.
 
